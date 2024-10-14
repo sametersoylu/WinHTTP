@@ -208,31 +208,30 @@ namespace WinHTTP {
         // Receives a response from server. Needs an open request
         // and a request must be sent already.
         std::optional<std::string> ReceiveResponse(LPVOID reserved = NULL) {
-            check_thread();
-            return if_request_available<std::optional<std::string>>([&]() -> std::optional<std::string> {
-                if(not WinHttpReceiveResponse(hRequest, reserved)) {
-                    return {};
-                }
-                std::stringstream ret; 
-                DWORD dwSize = 0;
-                DWORD dwDownloaded = 0;
-                LPSTR pszOutBuffer; 
-                do {
-                    dwSize = 0;
-                    if (WinHttpQueryDataAvailable(hRequest, &dwSize)) {
-                        pszOutBuffer = new char[dwSize + 1];
-                        ZeroMemory(pszOutBuffer, dwSize + 1); 
+        check_thread();
+        return if_request_available<std::optional<std::string>>([&]() -> std::optional<std::string> {
+            if (!WinHttpReceiveResponse(hRequest, reserved)) {
+                return {};
+            }
 
-                        if(WinHttpReadData(hRequest, (LPVOID)pszOutBuffer, dwSize, &dwDownloaded)) {
-                            ret << pszOutBuffer;
-                        }
+            std::stringstream ret; 
+            DWORD dwSize = 0;
+            DWORD dwDownloaded = 0;
 
-                        delete[] pszOutBuffer;
-                    } 
-                } while(dwSize > 0);
-                return  ret.str();
-            });
-        }
+            std::vector<char> buffer; // Use vector to manage memory automatically
+            do {
+                dwSize = 0;
+                if (WinHttpQueryDataAvailable(hRequest, &dwSize)) {
+                    buffer.resize(dwSize); // Resize to required size
+                    if (WinHttpReadData(hRequest, buffer.data(), dwSize, &dwDownloaded)) {
+                        ret.write(buffer.data(), dwDownloaded); // Write to stringstream
+                    }
+                } 
+            } while (dwSize > 0);
+
+            return ret.str();
+        });
+    }
 
         bool SessionAvailable() {
             return hSession; 
@@ -393,7 +392,7 @@ namespace WinHTTP {
         class Response {
             public:
             Response(HTTPBuilder * owner) : owner(owner) {}
-            std::string Recieve() {
+            std::string Receive() {
                 auto resp = owner->session.ReceiveResponse();
                 if(not resp) {
                     throw std::runtime_error("Recieve failed!");
@@ -402,19 +401,25 @@ namespace WinHTTP {
             }
             private:
             HTTPBuilder * owner;
-        }; 
+        };
+
+        template<typename ReqType>
+        class SetTarget {
+            public:
+            SetTarget(HTTPBuilder * owner) : owner(owner) {} 
+            ReqType Target(const std::wstring& target) {
+                return {owner, target};
+            }
+            private: 
+            HTTPBuilder * owner;
+        };
 
         template<typename ReqType>
         class Request {
             public: 
             Request() : owner(nullptr) {}
             Request(HTTPBuilder * owner, const std::wstring& verb) : owner(owner), verb(verb) {}
-            
-            ReqType& Target(const std::wstring& objectName) {
-                this->objectName = objectName;
-                return *static_cast<ReqType*>(this);
-            }
-
+            Request(HTTPBuilder * owner, const std::wstring& verb, const std::wstring& target) : owner(owner), verb(verb), objectName(target) {}
             ReqType& Version(const std::wstring& version) {
                 this->version = version;
                 return *static_cast<ReqType*>(this);
@@ -446,6 +451,8 @@ namespace WinHTTP {
         class PostRequest : public Request<PostRequest> {
             public:
             PostRequest(HTTPBuilder *owner) : Request(owner, L"POST") {}
+            PostRequest(HTTPBuilder *owner, const std::wstring& target) : Request(owner, L"POST", target) {}
+
             PostRequest& AddFormData(const std::string& key, const WinHTTP::FormContent& content) {
                 formData.emplace_back(key, content);
                 return *this;
@@ -468,6 +475,7 @@ namespace WinHTTP {
         class GetRequest : public Request<GetRequest> {
             public:
             GetRequest(HTTPBuilder *owner) : Request(owner, L"GET") {}
+            GetRequest(HTTPBuilder *owner, const std::wstring& target) : Request(owner, L"POST", target) {}
             //Sends the request and returns a response
             Response& Send() {
                 if(not owner->session.ConnectionAvailable())
@@ -491,11 +499,11 @@ namespace WinHTTP {
             public:
             Connection() : owner(nullptr) {}
             Connection(HTTPBuilder* owner) : owner(owner) {}
-            GetRequest& GetRequest() {
-                return *new class GetRequest{owner};
+            SetTarget<GetRequest> GetRequest() {
+                return SetTarget<class GetRequest>{owner};
             }
-            PostRequest& PostRequest() {
-                return *new class PostRequest{owner};
+            SetTarget<PostRequest> PostRequest() {
+                return SetTarget<class PostRequest>{owner};
             }
             private:
             HTTPBuilder* owner;

@@ -72,7 +72,7 @@ res = WinHTTP::HTTPBuilder{L"example"}.Connect(L"localhost", 8000)
     .AddFormData("password", {"somesecurepassword"})
     .Send().Recieve();
 ```
-You cannot call any of the methods before Connect, so you can't use it wrong except for the specifying target. You MUST specify target to be able to send request. Same principles are applied for multipart forms from WinHTTP class. Let's repeat the image example; 
+The builder has a specific order for you to build without making mistakes. So don't worry, you can't use things in wrong order. 
 
 ```cpp
 res = WinHTTP::HTTPBuilder{L"example"}.Connect(L"localhost", 8000)

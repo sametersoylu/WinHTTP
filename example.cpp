@@ -3,13 +3,12 @@
 
 int main() {
     auto res = WinHTTP::HTTPBuilder{L"example"}.Connect(L"localhost", 8000)
-    .GetRequest().Target(L"/").Send().Recieve();
+    .GetRequest().Target(L"/").Send().Receive();
     
     res = WinHTTP::HTTPBuilder{L"example"}.Connect(L"localhost", 8000)
-    .PostRequest().Target(L"/api/login")
-    .AddFormData("email", {"mail@example.com"})
-    .AddFormData("password", {"1234!.1234"})
-    .Send().Recieve();
+    .PostRequest().Target(L"api/forgotpassword")
+    .AddFormData("email", {"abdussametersoylu@gmail.com"})
+    .Send().Receive();
 
     std::cout << res << std::endl;
 
